@@ -1,0 +1,227 @@
+---
+runtime: shiny
+title: "Monthly deaths in Slovenia since 1977"
+output: html_document
+---
+```{r}
+
+```
+
+```{r setup, include = TRUE, message = FALSE, warning = FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(tidyr)
+library(ISOweek)
+library(ggplot2)
+library(shiny)
+library(plotly)
+```
+
+```{r echo = FALSE}
+deathdata1 <- read.table("./data/umrljivost_1977_2018.txt", header = TRUE, sep = "\t", check.names = FALSE)
+colnames(deathdata1)[1] <- "year"
+deathdata1 <- pivot_longer(deathdata1, -year, names_to = "month")
+deathdata1$month <- sprintf("%02d", as.numeric(deathdata1$month))
+deathdata1$year_month <- with(deathdata1, paste(year, month, "01", sep = "-"))
+deathdata1$year_month <- as.Date(deathdata1$year_month, format = "%Y-%m-%d")
+
+dd1 <- deathdata1[, c("year", "month", "value")]
+```
+
+```{r echo = FALSE}
+ddd <- read_excel("./data/daily_death_toll_2019_partly_2020.xlsx", sheet = "Podatki")
+ddd$Datum <- as.POSIXlt(ddd$Datum, format = "%Y-%m-%d %H:%M:%S")
+
+# This to be removed once we have full data for April.
+cut.april <- as.POSIXlt("2020-04-21 00:00:00", format = "%Y-%m-%d %H:%M:%S")
+end.april <- as.POSIXlt("2020-05-01 00:00:00", format = "%Y-%m-%d %H:%M:%S")
+
+ddd <- ddd[ddd$Datum <= cut.april, ]
+ddd <- data.frame(
+  year = ddd$Leto,
+  month = strftime(ddd$Datum, format = "%m"),
+  value = ddd$`št. na Dan`
+)
+
+dd2 <- aggregate(value ~ year + month, data = ddd, FUN = sum)
+
+# # Impute April based on mean death rate for this month.
+# # This is to be removed once we have all data for April.
+# ddd.april <- ddd$year == 2020 & ddd$month == "04"
+# april.mean <- mean(ddd[ddd.april, "value"])
+# find.april <- dd2$year == 2020 & dd2$month == "04"
+# rest.of.april <- april.mean * as.numeric(end.april - cut.april)
+# dd2[find.april, "value"] <- dd2[find.april, "value"] + rest.of.april
+
+# dd2 has columns year, month and value
+dd2 <- dd2[dd2$year < 2020, ]
+```
+
+```{r echo = FALSE}
+# dd4 <- read_excel("./data/umrljivost_update_2020_10_07.xls", sheet = "adapted")
+dd4 <- read_excel("./data/Umrljivost_update_2020_11_23.xls", sheet = "adapted")
+dd4 <- as.data.frame(dd4)
+dd4$value <- as.numeric(dd4$value)
+dd4 <- data.frame(year = strftime(x = dd4$datum, format = "%Y"),
+                  month = strftime(x = dd4$datum, format = "%m"),
+                  value = dd4$value)
+dd4 <- aggregate(value ~ year + month, data = dd4, FUN = sum)
+# Remove november as it's not complete yet.
+dd4 <- dd4[dd4$year == 2020 & dd4$month != 11, ]
+```
+
+```{r echo = FALSE}
+dd <- rbind(dd1, dd2, dd4)
+dd <- as.data.frame(dd)
+dd$year <- as.numeric(dd$year)
+```
+
+```{r echo = FALSE}
+# Import daily data
+dbd <- read.table("./data/death_by_day_2000_onward.txt", header = TRUE, sep = "\t", nrows = 7688)  # dbd = death by day
+
+colnames(dbd) <- c("year_month", "day", "count")
+find.year.month <- "^(\\d{4})M(\\d{2}).*$"
+dbd$year <- gsub(find.year.month, replacement = "\\1", x = dbd$year_month)
+dbd$month <- gsub(find.year.month, replacement = "\\2", x = dbd$year_month)
+dbd$datum <- as.Date(paste(dbd$year, dbd$month, dbd$day, sep = "-"))
+
+dbd$count <- as.numeric(dbd$count)
+
+# Use a fake year to align the data.
+dbd$fake_datum <- as.Date(paste(1, dbd$month, dbd$day, sep = "-"))
+
+dbd$year_month <- NULL
+
+dbd.download <- dbd[, c("year", "month", "day", "count")]
+```
+
+```{r echo = FALSE}
+sliderInput(
+  inputId = "sel_year",
+  min = min(dd$year),
+  max = max(dd$year),
+  step = 1,
+  label = "Highlight year",
+  value = 2020,
+  width = "100%",
+  sep = ""
+)
+
+sliderInput(
+  inputId = "sel_background",
+  min = min(dd$year),
+  max = max(dd$year),
+  step = 1,
+  label = "Select background range",
+  value = c(min(dd$year), max(dd$year)),
+  width = "100%",
+  sep = ""
+)
+```
+
+```{r echo = FALSE}
+renderPlot({
+  subdd <- dd[dd$year >= input$sel_background[1] & 
+                dd$year <= input$sel_background[2], ]
+  
+  ggplot(subdd, aes(x = month, y = value, group = year)) +
+    theme_bw() +
+    xlab("Month") + ylab("Number of deaths per month") +
+    geom_violin(aes(group = month), alpha = 0.5) +
+    geom_line(alpha = 0.5) +
+    geom_line(data = dd[dd$year == input$sel_year, ], color = "red", size = 1)
+}, res = 100)
+```
+
+```{r echo = FALSE}
+downloadLink(
+  outputId = "download_data",
+  label = "Download monthly data"
+)
+
+output$download_data <- downloadHandler(
+  filename = function() {
+    sprintf("monthly_deaths_slovenia_%s_%s.txt", min(dd$year), max(dd$year))
+  },
+  content = function(con) {
+    write.table(dd, file = con, quote = FALSE, row.names = FALSE)
+  }
+)
+```
+
+```{r echo = FALSE, fig.width = 5, fig.height = 3}
+renderPlot({
+  ggplot(dbd, aes(x = fake_datum, y = count, group = year)) +
+    theme_bw() +
+    xlab("Datum") +
+    ylab("Number of deaths per day") +
+    scale_x_date(date_labels = "%b%d", date_breaks = "1 month") +
+    geom_line(alpha = 0.4) +
+    geom_point(alpha = 0.4) +
+    geom_point(data = function(x) x[x$year == input$sel_year, ], color = "red") +
+    geom_line(data = function(x) x[x$year == input$sel_year, ], color = "red")
+}, res = 100)
+```
+
+```{r echo = FALSE}
+downloadLink(
+  outputId = "download_daily_data",
+  label = "Download daily data"
+)
+
+output$download_daily_data <- downloadHandler(
+  filename = function() {
+    "daily_death_data_slovenia_since_2000.txt"
+  },
+  content = function(con) {
+    write.table(dbd.download, file = con, quote = FALSE, row.names = FALSE)
+  }
+)
+```
+
+### Compare years by month(s)
+```{r echo = FALSE}
+selectInput(
+  inputId = "sel_month",
+  label = "Select month",
+  choices = sort(unique(dd$month)),
+  selected = "01",
+  multiple = TRUE
+)
+```
+
+```{r echo = FALSE, warning = FALSE}
+renderPlot({
+  if (is.null(input$sel_month)) return(NULL)
+  
+  ggplot(dd[dd$month %in% input$sel_month, ], aes(x = year, y = value, fill = month)) +
+    theme_bw() +
+    theme(legend.position = "top") +
+    xlab("Years") +
+    ylab("Number of deaths per month") +
+    scale_fill_brewer(palette = "Paired") +
+    geom_bar(stat = "identity", position = "dodge")
+}, res = 100)
+```
+
+#### Daily data for all years
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+renderPlot({
+  ggplot(dbd, aes(x = fake_datum, y = count, group = year)) +
+    theme_bw() +
+    xlab("Datum") + ylab("Deaths per day") +
+    geom_line(size = 0.5) +
+    geom_point() +
+    geom_smooth(method = "loess", color = "red", se = FALSE, span = 0.1) +
+    facet_wrap(~ year, ncol = 3)
+}, res = 100, width = 1000, height = 1500)
+```
+(red line is a loess smoothed line with span of 0.1)
+
+[Matjaž Jeran provided data](https://sledilnik.slack.com/archives/CV93RSH17/p1587931284356400) on number of deaths by year-month for Slovenia for era 1977-2018. [Andrej Viršček provided daily data](https://sledilnik.slack.com/archives/CV93RSH17/p1588680372152800?thread_ts=1587931284.356400&cid=CV93RSH17) for 2019-2020 (source Ministry of the interior). Data comes from Ministry of interior and includes also persons who are not citizens but have died in Slovenia.
+
+Daily data downloaded from [stat.si](https://pxweb.stat.si/SiStatData/pxweb/sl/Data/-/05L1018S.px) as a "relational" file. Note that _recent daily data may be provisional and subject to change_. It includes persons with permanent residence in Slovenia, possibly also persons who have died when abroad.
+
+App by Roman Luštrik, last updated on `r Sys.Date()`. Contact me on twitter @romunov.
