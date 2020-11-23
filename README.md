@@ -1,0 +1,1 @@
+This app is deployed at [romunov.shinyapps.io/slovenia_deaths](https://romunov.shinyapps.io/slovenia_deaths/). Please take special note of the data sources listed at the end. In short, daily and monthly data do not come from the same sources and may thus show a slight disagreement.
