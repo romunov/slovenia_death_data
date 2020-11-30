@@ -18,7 +18,7 @@ surs$year <- gsub(find.year.month, replacement = "\\1", x = surs$year_month)
 surs$month <- gsub(find.year.month, replacement = "\\2", x = surs$year_month)
 surs$datum <- as.Date(paste(surs$year, surs$month, surs$day, sep = "-"))
 
-surs$count <- as.numeric(surs$count)
+surs$count <- as.numeric(as.character(surs$count))
 
 # Use a fake year to align the data.
 surs$fake_datum <- as.Date(paste(1, surs$month, surs$day, sep = "-"))
@@ -29,6 +29,7 @@ surs <- surs[!is.na(surs$datum), c("datum", "count")]
 colnames(surs) <- c("datum", "surs")
 
 xy <- merge(x = surs, y = mnz)
+xy <- merge(x = mnz, y = surs, all.x = TRUE)
 
 xyl <- reshape(data = xy,
                direction = "long",
@@ -46,19 +47,18 @@ ggplot(xyl, aes(x = datum, y = deceased, color = source)) +
   scale_x_date(date_labels = "%b-%Y", date_breaks = "4 months") +
   scale_color_brewer(palette = "Dark2") +
   geom_line(size = 0.5) +
-  geom_smooth(method = "loess", span = 0.01) +
+  # geom_smooth(method = "loess", span = 0.01) +
   geom_line(data = xy, aes(x = datum, y = diff), color = "black", alpha = 0.4) +
   geom_hline(data = xy, aes(yintercept = mean(diff)), color = "black") +
   annotate(geom = "text", 
            x = c(as.Date("2009-10-01"), as.Date("2021-01-01")), 
-           y = c(27, 27), 
+           y = c(2.5, 2.5), 
            label = c("difference", "difference"))
 ggsave("./figures/comparing_surs_mnz_series.png", width = 25, height = 6)  
 
 ggplot(xy, aes(x = diff)) +
   theme_bw() +
-  scale_x_continuous(limits = c(20, 35)) +
   geom_histogram(binwidth = 1)
 
-xy.ccf <- ccf(x = xy$surs, y = xy$mnz)
-xy.acf <- acf(xy[, c("surs", "mnz")])
+xy.ccf <- ccf(x = xy$surs, y = xy$mnz, na.action = na.pass)
+xy.acf <- acf(xy[, c("surs", "mnz")], na.action = na.pass)

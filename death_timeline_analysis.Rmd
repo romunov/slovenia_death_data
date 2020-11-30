@@ -42,7 +42,7 @@ dd <- as.data.frame(dd)
 dd$year <- as.numeric(dd$year)
 ```
 
-```{r echo = FALSE}
+```{r echo = FALSE, warning = FALSE, message = FALSE}
 # Import daily data downloaded from SURS
 # 
 dbd <- read.table(file = "./data/surs_death_by_day_2000-2020-09.txt", 
@@ -54,7 +54,7 @@ dbd$year <- gsub(find.year.month, replacement = "\\1", x = dbd$year_month)
 dbd$month <- gsub(find.year.month, replacement = "\\2", x = dbd$year_month)
 dbd$datum <- as.Date(paste(dbd$year, dbd$month, dbd$day, sep = "-"))
 
-dbd$count <- as.numeric(dbd$count)
+dbd$count <- as.numeric(as.character(dbd$count))
 
 # Use a fake year to align the data.
 dbd$fake_datum <- as.Date(paste(1, dbd$month, dbd$day, sep = "-"))
