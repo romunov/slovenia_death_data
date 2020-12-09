@@ -5,11 +5,20 @@ library(readxl)
 # Daily mortality data from Ministry of interior.
 xy <- read_excel("./data/umrljivost_update_2020_11_30.xls", sheet = "adapted")
 xy <- as.data.frame(xy)  # tibble, no thanks
+xy$datum <- as.Date(xy$datum)
+xy <- xy[xy$datum < as.Date("2020-01-01"), ]
+
+# TEMPORARILY(?) because the last update is for 2020 only
+xy2 <- read_excel("./data/umrljivost_updated_2020_12_09.xls", sheet = "adapted")
+xy2 <- as.data.frame(xy2)
+xy2$datum <- as.Date(xy2$datum)
+xy2 <- xy2[xy2$datum < as.Date("2020-12-01"), ]
+
+xy <- rbind(xy, xy2)
 
 xy$value <- as.numeric(xy$value)
 colnames(xy) <- c("datum", "count")
-xy$datum <- as.Date(xy$datum)
-xy$fake_datum <- as.Date(strftime(xy$datum, format = "1-%m-%d"))
+xy$fake_datum <- as.Date(strftime(xy$datum, format = "0-%m-%d"))
 xy$year <- strftime(xy$datum, format = "%Y")
 
 # Variables needed for the animation.
@@ -35,8 +44,10 @@ xy[xy$year == 2020, "alpha"] <- 1
 # Create a smoothed count which will be used to draw label near the point.
 xy$smoothed <- predict(loess(count ~ as.numeric(datum), data = xy), newdata = xy[, c("datum")])
 
-# Some days may not be complete yet.
-xy <- xy[xy$datum <= as.Date("2020-11-23"), ]
+xy <- xy[xy$datum >= as.Date("2016-01-01"), ]
+
+minmax <- strftime(xy$datum, format = "%Y")
+minmax <- as.numeric(minmax)
 
 fig <- ggplot(xy, aes(x = fake_datum, y = count)) +
   theme_bw() +
@@ -45,11 +56,11 @@ fig <- ggplot(xy, aes(x = fake_datum, y = count)) +
     axis.title = element_blank(),
     legend.position = "none"
   ) +
-  labs(title = "Daily deaths in Slovenia (2010-2020)",
-       caption = "Source: Ministry of interior") +
+  labs(title = sprintf("Daily deaths in Slovenia (%s-%s)", min(minmax), max(minmax)),
+  caption = "Source: Ministry of interior") +
   geom_line(aes(group = year, color = I(color), alpha = alpha), size = 0.25) +
   geom_point(color = "gray20") +
-  scale_y_continuous(limits = c(0, 120)) +
+  scale_y_continuous(limits = c(0, 125)) +
   scale_x_date(date_breaks = "1 month", date_labels = "%b", expand = expansion(add = c(0, -15))) +
   geom_text(aes(y = smoothed, label = year), nudge_x = 15, size = 3, color = "gray20") +
   coord_polar() +
