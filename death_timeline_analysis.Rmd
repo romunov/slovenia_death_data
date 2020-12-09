@@ -5,7 +5,7 @@ output: html_document
 ---
 
 ```{r setup, include = TRUE, message = FALSE, warning = FALSE, echo = FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 
 library(readxl)
 library(tidyr)
@@ -30,6 +30,11 @@ dd1 <- dd1[dd1$year < 2010, ]
 dd2 <- read_excel("./data/umrljivost_update_2020_11_30.xls", sheet = "adapted")  # 2010-2020
 dd2 <- as.data.frame(dd2)
 dd2$value <- as.numeric(dd2$value)
+dd2$datum <- as.Date(dd2$datum)
+
+# TODO: because data in next chunk is for 2020 only, we need to omit it here
+dd2 <- dd2[dd2$datum < as.Date("2020-01-01"), ]
+
 dd2 <- data.frame(year = strftime(x = dd2$datum, format = "%Y"),
                   month = strftime(x = dd2$datum, format = "%m"),
                   deceased = dd2$value)
@@ -37,7 +42,21 @@ dd2 <- aggregate(deceased ~ year + month, data = dd2, FUN = sum)
 ```
 
 ```{r echo = FALSE}
-dd <- rbind(dd1, dd2)
+dd3 <- read_excel("./data/umrljivost_updated_2020_12_09.xls", sheet = "adapted")
+dd3 <- as.data.frame(dd3)
+dd3$datum <- as.Date(dd3$datum)
+
+# Data for December are not yet complete.
+dd3 <- dd3[dd3$datum < as.Date("2020-12-01"), ]
+
+dd3 <- data.frame(year = strftime(x = dd3$datum, format = "%Y"),
+                  month = strftime(x = dd3$datum, format = "%m"),
+                  deceased = dd3$value)
+dd3 <- aggregate(deceased ~ year + month, data = dd3, FUN = sum)
+```
+
+```{r echo = FALSE}
+dd <- rbind(dd1, dd2, dd3)
 dd <- as.data.frame(dd)
 dd$year <- as.numeric(dd$year)
 ```
@@ -103,7 +122,7 @@ renderPlot({
     geom_line(data = dd[dd$year == input$sel_year, ], color = "red", size = 1)
 }, res = 100)
 ```
-<p><strong>Data for November 2020 is not yet complete!!!!!11oneoneeleven. Using an odokatif extrapolation, I expect for the final count to increase by about 600.</strong></p>
+
 ```{r echo = FALSE}
 downloadLink(
   outputId = "download_data",
